@@ -2,3 +2,6 @@
 build
 release
 vendor
+
+# Files that should not be checked in.
+init

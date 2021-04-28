@@ -4,9 +4,10 @@ DEV_RUN_OPTS ?= consul:
 
 dev:
 	docker build -f Dockerfile.dev -t $(NAME):dev .
-	docker run --rm \
-		-v /var/run/docker.sock:/tmp/docker.sock \
-		$(NAME):dev /bin/registrator $(DEV_RUN_OPTS)
+	# NOTE(ywen): We want to start the `registrator` container in our way.
+	# docker run --rm \
+	# 	-v /var/run/docker.sock:/tmp/docker.sock \
+	# 	$(NAME):dev /bin/registrator $(DEV_RUN_OPTS)
 
 build:
 	mkdir -p build

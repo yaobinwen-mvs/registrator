@@ -1,0 +1,30 @@
+- name: Restart the Registrator container.
+  hosts: all
+  gather_facts: yes  # required for airplane_mode_address
+  tasks:
+    - name: Create the Registrator container.
+      vars:
+        airplane_mode_address: '{{ansible_facts.ansible_local.airplane_mode.address}}'
+      docker_container:
+        comparisons:
+          log_opt: strict
+        dns_servers: '{{airplane_mode_address}}'
+        env:
+          CONSUL_HTTP_ADDR: http://{{airplane_mode_address}}:8500
+          REGISTRATOR_ENVIRONMENT_FILE: /io/environment
+        hostname: 'ywen-Precision-M4800'
+        image: registrator:dev
+        log_driver: journald
+        log_opt:
+          tag: registrator
+        volumes:
+          - /etc/mvs/registrator:/io:ro
+          - /etc/localtime:/etc/localtime:ro
+          - /etc/timezone:/etc/timezone:ro
+          - /var/run/docker.sock:/tmp/docker.sock
+        name: registrator
+        # The entire point of this playbook is to restart Registrator when the
+        # service IP changes.
+        restart: yes
+        restart_policy: always
+        state: started

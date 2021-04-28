@@ -1,6 +1,7 @@
 package bridge
 
 import (
+  "log"
 	"strconv"
 	"strings"
 
@@ -89,6 +90,7 @@ func servicePort(container *dockerapi.Container, port dockerapi.Port, published 
 	if len(published) > 0 {
 		hp = published[0].HostPort
 		hip = published[0].HostIP
+    log.Printf("[ywen] [servicePort] len(published) = %v, so hp = %v, hip = %v\n", len(published), hp, hip)
 	}
 	if hip == "" {
 		hip = "0.0.0.0"
@@ -98,9 +100,11 @@ func servicePort(container *dockerapi.Container, port dockerapi.Port, published 
 	//detect if container use overlay network, than set HostIP into NetworkSettings.Network[string].IPAddress
 	//better to use registrator with -internal flag
 	nm = container.HostConfig.NetworkMode
+  log.Printf("[ywen] [servicePort] nm (container.HostConfig.NetworkMode) = %v\n", nm)
 	if nm != "bridge" && nm != "default" && nm != "host" {
 		hip = container.NetworkSettings.Networks[nm].IPAddress
 	}
+  log.Printf("[ywen] [servicePort] hip = %v\n", hip)
 
 	exposedPort := strings.Split(string(port), "/")
 	ep = exposedPort[0]
@@ -109,6 +113,7 @@ func servicePort(container *dockerapi.Container, port dockerapi.Port, published 
 	} else {
 		ept = "tcp" // default
 	}
+  log.Printf("[ywen] [servicePort] ep = %v, ept = %v", ep, ept)
 
 	// Nir: support docker NetworkSettings
 	eip = container.NetworkSettings.IPAddress
@@ -117,8 +122,9 @@ func servicePort(container *dockerapi.Container, port dockerapi.Port, published 
 			eip = network.IPAddress
 		}
 	}
+  log.Printf("[ywen] [servicePort] eip = %v, ept = %v\n", eip, ept)
 
-	return ServicePort{
+  srv := ServicePort{
 		HostPort:          hp,
 		HostIP:            hip,
 		ExposedPort:       ep,
@@ -128,4 +134,7 @@ func servicePort(container *dockerapi.Container, port dockerapi.Port, published 
 		ContainerHostname: container.Config.Hostname,
 		container:         container,
 	}
+  log.Printf("[ywen] [servicePort] returning service: %+v\n", srv)
+
+	return srv
 }

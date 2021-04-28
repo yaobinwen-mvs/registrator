@@ -1,13 +1,17 @@
 FROM alpine:3.7
-CMD ["/bin/registrator"]
 
 COPY . /go/src/github.com/gliderlabs/registrator
-RUN apk --no-cache add -t build-deps build-base go git curl \
-	&& apk --no-cache add ca-certificates \
-	&& export GOPATH=/go && mkdir -p /go/bin && export PATH=$PATH:/go/bin \
-	&& curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh \
-	&& cd /go/src/github.com/gliderlabs/registrator \
-	&& export GOPATH=/go \
-	&& git config --global http.https://gopkg.in.followRedirects true \
-	&& dep ensure \
-	&& go build -ldflags "-X main.Version=dev" -o /bin/registrator
+COPY ./makefile_dev.sh /usr/local/bin/
+
+RUN /usr/local/bin/makefile_dev.sh
+
+VOLUME ["/io"]
+
+# systemd(1) likes to install itself as /sbin/init. On Ubuntu 20.04 this
+# apparently happens *after* Dockerfile.0 finishes, unlike all previous Ubuntu
+# versions. Let's just make our own init path that nothing else will touch.
+RUN install -d -o0 -g0 -m0755 /container/
+COPY init /container/
+RUN chmod +x /container/init
+ENTRYPOINT ["/container/init"]
+CMD []

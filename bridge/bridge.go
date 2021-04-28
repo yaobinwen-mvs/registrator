@@ -181,6 +181,8 @@ func (b *Bridge) Sync(quiet bool) {
 }
 
 func (b *Bridge) add(containerId string, quiet bool) {
+  log.Printf("[ywen] adding the container (ID=%v) (quiet=%v)\n", containerId, quiet)
+
 	if d := b.deadContainers[containerId]; d != nil {
 		b.services[containerId] = d.Services
 		delete(b.deadContainers, containerId)
@@ -198,17 +200,28 @@ func (b *Bridge) add(containerId string, quiet bool) {
 		return
 	}
 
+  // NOTE(ywen):
+  // - `ServicePort` is a `struct` defined in `bridge/types.go`.
+  // - `:=` is the short variable declaration to declares variables.
+  // - `map`: MapType = "map" "[" KeyType "]" ElementType .
+  // - `make`: `make` in this case initializes the map.
 	ports := make(map[string]ServicePort)
 
 	// Extract configured host port mappings, relevant when using --net=host
 	for port, _ := range container.Config.ExposedPorts {
 		published := []dockerapi.PortBinding{ {"0.0.0.0", port.Port()}, }
 		ports[string(port)] = servicePort(container, port, published)
+    log.Printf("[ywen] (--net=host) extracting port mapping: %v (\"0.0.0.0\") -> %+v\n", port, ports[string(port)])
 	}
 
 	// Extract runtime port mappings, relevant when using --net=bridge
 	for port, published := range container.NetworkSettings.Ports {
+    // FIXME(ywen): Here, the use of `ports` mapping naturally assumes that one `port` maps to exactly one
+    // `servicePort`. In other words, it assumes that one `port` is published to exactly one `published port`.
+    // However, in our case of `hecla-postgres`, one `port` is published to two `published ports` (one for
+    // the IPv4 address and the other for the IPv6 address).
 		ports[string(port)] = servicePort(container, port, published)
+    log.Printf("[ywen] (--net=bridge) extracting port mapping: %v (published as %v) -> %+v\n", port, published, ports[string(port)])
 	}
 
 	if len(ports) == 0 && !quiet {
@@ -216,26 +229,35 @@ func (b *Bridge) add(containerId string, quiet bool) {
 		return
 	}
 
+  log.Printf("[ywen] going to build the 'servicePorts' mapping\n")
 	servicePorts := make(map[string]ServicePort)
 	for key, port := range ports {
+    log.Printf("[ywen] looking at the port: %v -> %v\n", key, port)
+
 		if b.config.Internal != true && port.HostPort == "" {
 			if !quiet {
 				log.Println("ignored:", container.ID[:12], "port", port.ExposedPort, "not published on host")
 			}
 			continue
 		}
+    log.Printf("[ywen] adding the port to 'servicePorts' mapping: %v -> %v", key, port)
 		servicePorts[key] = port
 	}
+  log.Printf("[ywen] finished building the 'servicePorts' mapping\n")
 
 	isGroup := len(servicePorts) > 1
+  log.Printf("[ywen] isGroup = %v\n", isGroup)
 	for _, port := range servicePorts {
 		service := b.newService(port, isGroup)
+    log.Printf("[ywen] b.newService(%v, %v) returns: %+v\n", port, isGroup, service)
+
 		if service == nil {
 			if !quiet {
 				log.Println("ignored:", container.ID[:12], "service on port", port.ExposedPort)
 			}
 			continue
 		}
+		log.Printf("[ywen] registering service: %+v\n", service)
 		err := b.registry.Register(service)
 		if err != nil {
 			log.Println("register failed:", service, err)
@@ -247,6 +269,8 @@ func (b *Bridge) add(containerId string, quiet bool) {
 }
 
 func (b *Bridge) newService(port ServicePort, isgroup bool) *Service {
+  log.Printf("[ywen] [newService] port = %v, isgroup = %v\n", port, isgroup)
+
 	container := port.container
 	defaultName := strings.Split(path.Base(container.Config.Image), ":")[0]
 
@@ -255,16 +279,21 @@ func (b *Bridge) newService(port ServicePort, isgroup bool) *Service {
 	if hostname == "" {
 		hostname = port.HostIP
 	}
+  log.Printf("[ywen] [newService] hostname = %v\n", hostname)
+
 	if port.HostIP == "0.0.0.0" {
 		ip, err := net.ResolveIPAddr("ip", hostname)
 		if err == nil {
 			port.HostIP = ip.String()
 		}
 	}
+  log.Printf("[ywen] [newService] port (HostIP may be updated) = %v\n", port)
 
 	if b.config.HostIp != "" {
+    log.Printf("[ywen] [newService] using b.config.HostIp to replace the current port.HostIP\n")
 		port.HostIP = b.config.HostIp
 	}
+  log.Printf("[ywen] [newService] port (HostIP may be updated) = %v\n", port)
 
 	metadata, metadataFromPort := serviceMetaData(container.Config, port.ExposedPort)
 
